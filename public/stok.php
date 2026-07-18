@@ -94,9 +94,9 @@ page_header('Stok', 'stok');
   <div class="grow">
     <label>Barkod / Model ara <span class="muted">(barkodu okutup Enter → sayıldı işaretlenir)</span></label>
     <input type="text" id="araKutu" placeholder="Barkod okut veya model yaz..." autocomplete="off" autofocus>
-    <div id="barkodMesaj" style="min-height:18px;font-size:.82rem;margin-top:3px"></div>
   </div>
 </div>
+<div id="barkodMesaj" style="min-height:20px;font-size:.85rem;font-weight:600;margin:-4px 0 10px"></div>
 
 <div class="table-wrap">
 <table>

@@ -213,6 +213,12 @@ tr.toplam td { font-weight: 700; background: #f4f4f5; border-top: 2px solid #d4d
 .badge.stokta  { background: #dbeafe; color: #1d4ed8; }
 .badge.satildi { background: #dcfce7; color: #15803d; }
 
+/* Bekleme rozeti — hepsi rozet içinde; renksiz gri, 60+ sarı, 120+ kırmızı */
+.bekleme-rozet { display: inline-block; padding: 2px 8px; border-radius: 20px; font-size: .73rem; font-weight: 600; white-space: nowrap; }
+.bekleme-normal  { background: #f4f4f5; color: var(--text2); }
+.bekleme-sari    { background: #fef9c3; color: #854d0e; }
+.bekleme-kirmizi { background: #fee2e2; color: #b91c1c; }
+
 /* ---- Formlar ---- */
 label {
   display: block;

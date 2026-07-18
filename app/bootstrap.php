@@ -5,6 +5,11 @@ mb_internal_encoding('UTF-8');
 date_default_timezone_set('Europe/Istanbul');
 session_start();
 
+// PHP sayfaları ve API yanıtları önbelleğe alınmasın — güncellemeden sonra
+// tarayıcı hep taze kod/veri getirsin (statik dosyalar bundan etkilenmez).
+header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+header('Pragma: no-cache');
+
 require __DIR__ . '/db.php';
 require __DIR__ . '/functions.php';
 

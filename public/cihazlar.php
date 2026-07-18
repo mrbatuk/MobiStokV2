@@ -65,6 +65,9 @@ foreach ($rows as $r) {
         'buyer'    => $satildi ? ($r['buyer'] ?? '') : '',
         'pd'       => trdate($r['purchase_date']),
         'sd'       => $satildi ? trdate($r['sale_date']) : '',
+        'sds'      => $satildi ? (string)$r['sale_date'] : '', // sıralama için ham ISO tarih
+        'bekleme'  => max(0, (int)floor((($satildi ? strtotime($r['sale_date']) : strtotime('today')) - strtotime($r['purchase_date'])) / 86400)), // stokta: bugün−alış · satıldı: satış−alış
+
         'alis'     => (float)$r['purchase_price'],
         'satis'    => $satildi ? (float)$r['sale_price'] : null,
         'kar'      => $satildi ? (float)$r['profit'] : null,
@@ -83,7 +86,7 @@ page_header('Cihazlar', 'cihazlar');
   document.head.appendChild(s);
   try {
     const d = JSON.parse(localStorage.getItem('cihaz_sutunlar') || '{}');
-    const vars = {kategori:true,'alis-tarihi':true,imei:true,satici:false,not:true,'satis-tarihi':true,'satis-fiyati':true,kar:true,alici:true,durum:true};
+    const vars = {kategori:true,'alis-tarihi':true,imei:true,satici:false,not:true,'satis-tarihi':true,'satis-fiyati':true,kar:true,alici:true,bekleme:true,durum:true};
     const gizli = Object.entries(vars).filter(([k,v]) => (d[k] !== undefined ? d[k] : v) === false).map(([k]) => k);
     s.textContent = gizli.map(k => `[data-col="${k}"]{display:none}`).join('');
   } catch(e) {}
@@ -186,6 +189,7 @@ page_header('Cihazlar', 'cihazlar');
       <th class="num" data-col="satis-fiyati">Satış Fiyatı</th>
       <th class="num" data-col="kar">Kâr</th>
       <th data-col="alici">Alıcı</th>
+      <th data-col="bekleme">Bekleme</th>
       <th data-col="durum">Durum</th>
       <th></th>
     </tr>
@@ -204,6 +208,7 @@ page_header('Cihazlar', 'cihazlar');
       <td class="num" data-col="satis-fiyati" id="topSatis"></td>
       <td class="num" data-col="kar" id="topKar"></td>
       <td data-col="alici"></td>
+      <td data-col="bekleme"></td>
       <td data-col="durum"></td>
       <td></td>
     </tr>
@@ -312,7 +317,25 @@ function filtrele() {
   if (kar > 0) { sep2.style.display = ''; ozetK.textContent = 'Kâr: ' + trSayi(kar) + ' TL'; }
   else { sep2.style.display = 'none'; ozetK.textContent = ''; }
 
+  // "Satıldı" seçiliyken satış tarihine göre sırala (en yeni üstte);
+  // diğer durumlarda varsayılan sıra (alış tarihi, en yeni üstte) korunur.
+  if (filtreDurum === 'satildi') {
+    filtreli.sort((a, b) => (b.sds || '').localeCompare(a.sds || '') || (b.id - a.id));
+  }
+
   ciz();
+}
+
+// ---- Bekleme hücresi ----
+// Stokta: bugün−alış (kaç gündür bekliyor). Satıldı: satış−alış (kaç günde satıldı).
+// İkisi de aynı renklerle: 60+ sarı, 120+ kırmızı (geç satılan/uzun bekleyen görülsün).
+function beklemeHtml(d) {
+  if (d.bekleme == null) return '';
+  const g = d.bekleme;
+  const metin = g + ' gün';
+  const cls = g >= 120 ? 'bekleme-kirmizi' : (g >= 60 ? 'bekleme-sari' : 'bekleme-normal');
+  const baslik = d.durum === 'satildi' ? `${g} günde satıldı` : `${g} gündür stokta bekliyor`;
+  return `<span class="bekleme-rozet ${cls}" title="${baslik}">${metin}</span>`;
 }
 
 // ---- Tek satırın HTML'i ----
@@ -333,6 +356,7 @@ function satirHtml(d) {
     <td class="num" data-col="satis-fiyati">${satildi ? trSayi(d.satis) : ''}</td>
     <td class="num ${karCls}" data-col="kar">${satildi ? trSayi(d.kar) : ''}</td>
     <td data-col="alici">${esc(d.buyer)}</td>
+    <td data-col="bekleme">${beklemeHtml(d)}</td>
     <td data-col="durum"><span class="badge ${satildi ? 'satildi' : 'stokta'}">${satildi ? 'Satıldı' : 'Stokta'}</span></td>
     <td><div class="actions">${satBtn}
       <a class="btn-ikon duzenle" href="cihaz_form.php?id=${d.id}" title="Düzenle" aria-label="Düzenle"><svg><use href="#ico-duzenle"/></svg></a>
@@ -357,7 +381,7 @@ function ciz() {
   const bit = Math.min(bas + sayfaBoyutu, toplam);
 
   if (toplam === 0) {
-    govde.innerHTML = '<tr><td colspan="13" class="muted" style="text-align:center;padding:24px">Kayıt bulunamadı.</td></tr>';
+    govde.innerHTML = '<tr><td colspan="14" class="muted" style="text-align:center;padding:24px">Kayıt bulunamadı.</td></tr>';
   } else {
     let html = '';
     for (let i = bas; i < bit; i++) html += satirHtml(filtreli[i]);
@@ -465,11 +489,11 @@ function veriGuncelle(id, yeniNot) {
 
 // ---- Excel: filtreli tüm satırlar (sadece görünen sayfa değil) ----
 function gorunenleriAktar() {
-  const data = [['Kategori','Alış Tarihi','Model','IMEI','Alış Fiyatı','Satıcı','Not','Satış Tarihi','Satış Fiyatı','Kâr','Alıcı','Satış Notu']];
+  const data = [['Kategori','Alış Tarihi','Model','IMEI','Alış Fiyatı','Satıcı','Not','Satış Tarihi','Satış Fiyatı','Kâr','Alıcı','Bekleme (gün)','Satış Notu']];
   for (const d of filtreli) {
     data.push([
       d.kategori, d.pd, d.model, d.imei, d.alis, d.seller, d.note,
-      d.sd, d.satis ?? '', d.kar ?? '', d.buyer, d.snote
+      d.sd, d.satis ?? '', d.kar ?? '', d.buyer, (d.bekleme ?? ''), d.snote
     ]);
   }
   excelAktar(data, 'cihazlar', 'Cihazlar');
@@ -489,6 +513,7 @@ const SUTUNLAR = [
   { id: 'satis-fiyati', label: 'Satış Fiyatı',   varsayilan: true  },
   { id: 'kar',          label: 'Kâr',            varsayilan: true  },
   { id: 'alici',        label: 'Alıcı',          varsayilan: true  },
+  { id: 'bekleme',      label: 'Bekleme',        varsayilan: true  },
   { id: 'durum',        label: 'Durum',          varsayilan: true  },
 ];
 const SK = 'cihaz_sutunlar';
