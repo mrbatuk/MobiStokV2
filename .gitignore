@@ -1,0 +1,13 @@
+# Kullanici verisi — ASLA repoya girmez (veritabani, sifre hash, IMEI anahtari, tokenlar, yedekler)
+/data/
+
+# Tasinabilir PHP + rclone (~90 MB) — guncellemede gerekmez, repoyu sismesin
+/bin/
+
+# Editor / arac ayarlari (yerel)
+/.claude/
+
+# Isletim sistemi / gecici
+Thumbs.db
+desktop.ini
+*.tmp
