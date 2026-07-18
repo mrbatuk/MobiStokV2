@@ -7,6 +7,9 @@
 # Editor / arac ayarlari (yerel)
 /.claude/
 
+# Gelistirici araci — sadece yayinlayan bilgisayarda kalir, dukkan PC'lerine gitmez
+/YAYINLA.bat
+
 # Isletim sistemi / gecici
 Thumbs.db
 desktop.ini
