@@ -84,6 +84,55 @@ if ($b1 !== '' && $b2 !== '') {
     $aralik = range_sales_summary($pdo, $b1, $b2);
 }
 
+// Servis aylık özet
+$servisAylikSt = $pdo->prepare("
+    SELECT strftime('%Y-%m', alinan_tarih) AS ay,
+           COUNT(*) AS adet,
+           COALESCE(SUM(maliyet),  0) AS top_maliyet,
+           COALESCE(SUM(tahsilat), 0) AS top_tahsilat,
+           COALESCE(SUM(kar),      0) AS top_kar
+    FROM servis
+    WHERE durum != 'iptal' AND strftime('%Y', alinan_tarih) = ?
+    GROUP BY ay
+");
+$servisAylikSt->execute([$yil]);
+$servisAylik = [];
+foreach ($servisAylikSt->fetchAll() as $r) {
+    $servisAylik[$r['ay']] = $r;
+}
+$servisTablo = [];
+$servisYilTop = ['adet' => 0, 'maliyet' => 0.0, 'tahsilat' => 0.0, 'kar' => 0.0];
+for ($m = 1; $m <= 12; $m++) {
+    $ayKey = sprintf('%s-%02d', $yil, $m);
+    $s = $servisAylik[$ayKey] ?? ['adet' => 0, 'top_maliyet' => 0, 'top_tahsilat' => 0, 'top_kar' => 0];
+    $servisTablo[] = [
+        'ay'       => $m . '.AY',
+        'adet'     => (int)$s['adet'],
+        'maliyet'  => (float)$s['top_maliyet'],
+        'tahsilat' => (float)$s['top_tahsilat'],
+        'kar'      => (float)$s['top_kar'],
+    ];
+    $servisYilTop['adet']     += (int)$s['adet'];
+    $servisYilTop['maliyet']  += (float)$s['top_maliyet'];
+    $servisYilTop['tahsilat'] += (float)$s['top_tahsilat'];
+    $servisYilTop['kar']      += (float)$s['top_kar'];
+}
+
+// Servis tarih aralığı
+$servisAralik = null;
+if ($b1 !== '' && $b2 !== '') {
+    $st = $pdo->prepare("
+        SELECT COUNT(*) AS adet,
+               COALESCE(SUM(maliyet),  0) AS maliyet,
+               COALESCE(SUM(tahsilat), 0) AS tahsilat,
+               COALESCE(SUM(kar),      0) AS kar
+        FROM servis
+        WHERE durum != 'iptal' AND alinan_tarih BETWEEN ? AND ?
+    ");
+    $st->execute([$b1, $b2]);
+    $servisAralik = $st->fetch();
+}
+
 page_header('Rapor', 'rapor');
 ?>
 <div class="sayfa-alt" style="margin:0 0 14px">
@@ -151,7 +200,58 @@ page_header('Rapor', 'rapor');
   </div>
 </div>
 
-<h2>Tarih Aralığı Özeti</h2>
+<h2 style="margin:28px 0 12px">Servis</h2>
+
+<div class="table-wrap" style="max-width:760px;margin-bottom:20px">
+<table>
+  <thead>
+    <tr>
+      <th>Ay</th>
+      <th class="num">Adet</th>
+      <th class="num">Maliyet</th>
+      <th class="num">Tahsilat</th>
+      <th class="num">Kâr</th>
+    </tr>
+  </thead>
+  <tbody>
+  <?php foreach ($servisTablo as $t): if ($t['adet'] === 0 && $t['kar'] == 0) continue; ?>
+    <tr>
+      <td><?= e($t['ay']) ?></td>
+      <td class="num"><?= $t['adet'] ?></td>
+      <td class="num"><?= tl($t['maliyet']) ?></td>
+      <td class="num"><?= tl($t['tahsilat']) ?></td>
+      <td class="num <?= $t['kar'] >= 0 ? 'kar-poz' : 'kar-neg' ?>"><?= tl($t['kar']) ?></td>
+    </tr>
+  <?php endforeach; ?>
+  <?php if ($servisYilTop['adet'] === 0): ?>
+    <tr><td colspan="5" class="muted" style="text-align:center;padding:16px">Bu yıl servis kaydı yok.</td></tr>
+  <?php else: ?>
+  <tr class="toplam">
+    <td>TOPLAM</td>
+    <td class="num"><?= $servisYilTop['adet'] ?></td>
+    <td class="num"><?= tl($servisYilTop['maliyet']) ?></td>
+    <td class="num"><?= tl($servisYilTop['tahsilat']) ?></td>
+    <td class="num <?= $servisYilTop['kar'] >= 0 ? 'kar-poz' : 'kar-neg' ?>"><?= tl($servisYilTop['kar']) ?></td>
+  </tr>
+  <?php endif; ?>
+  </tbody>
+</table>
+</div>
+
+<?php if ($servisYilTop['adet'] > 0): ?>
+<div class="panel-grid" style="margin-bottom:24px">
+  <div class="panel">
+    <div class="chart-title">Aylık Servis Kâr (TL)</div>
+    <div class="chart-wrap"><canvas id="gs1"></canvas></div>
+  </div>
+  <div class="panel">
+    <div class="chart-title">Aylık Servis Tahsilat (TL)</div>
+    <div class="chart-wrap"><canvas id="gs2"></canvas></div>
+  </div>
+</div>
+<?php endif; ?>
+
+<h2 style="margin:0 0 12px">Tarih Aralığı Özeti</h2>
 <form method="get" class="filters">
   <input type="hidden" name="yil" value="<?= e($yil) ?>">
   <div>
@@ -168,7 +268,7 @@ page_header('Rapor', 'rapor');
 <?php if ($aralik !== null): ?>
 <div class="table-wrap" style="max-width:640px">
 <table>
-  <thead><tr><th>Kategori</th><th class="num">Satış Adedi</th><th class="num">Ciro</th><th class="num">Kâr</th></tr></thead>
+  <thead><tr><th>Kaynak</th><th class="num">Adet</th><th class="num">Ciro / Tahsilat</th><th class="num">Kâr</th></tr></thead>
   <tbody>
   <?php
   $ta = 0; $tc = 0.0; $tk = 0.0;
@@ -183,6 +283,15 @@ page_header('Rapor', 'rapor');
       <td class="num <?= $o['kar'] >= 0 ? 'kar-poz' : 'kar-neg' ?>"><?= tl($o['kar']) ?></td>
     </tr>
   <?php endforeach; ?>
+  <?php if ($servisAralik && $servisAralik['adet'] > 0): ?>
+    <tr>
+      <td>SERVİS</td>
+      <td class="num"><?= (int)$servisAralik['adet'] ?></td>
+      <td class="num"><?= tl($servisAralik['tahsilat']) ?></td>
+      <td class="num <?= $servisAralik['kar'] >= 0 ? 'kar-poz' : 'kar-neg' ?>"><?= tl($servisAralik['kar']) ?></td>
+    </tr>
+    <?php $ta += (int)$servisAralik['adet']; $tc += (float)$servisAralik['tahsilat']; $tk += (float)$servisAralik['kar']; ?>
+  <?php endif; ?>
   <tr class="toplam">
     <td>TOPLAM</td>
     <td class="num"><?= $ta ?></td>
@@ -228,5 +337,14 @@ cizim('g1', <?= json_encode($satisSeri, JSON_UNESCAPED_UNICODE) ?>, true);
 cizim('g2', [{ label: 'Toplam Satış', data: <?= json_encode($toplamSatis) ?>, backgroundColor: '#2a78d6' }], false);
 cizim('g3', <?= json_encode($karSeri, JSON_UNESCAPED_UNICODE) ?>, true);
 cizim('g4', [{ label: 'Toplam Kâr', data: <?= json_encode($toplamKar) ?>, backgroundColor: '#1baf7a' }], false);
+
+<?php if ($servisYilTop['adet'] > 0): ?>
+const SERVIS_KAR      = <?= json_encode(array_column($servisTablo, 'kar')) ?>;
+const SERVIS_TAHSILAT = <?= json_encode(array_column($servisTablo, 'tahsilat')) ?>;
+if (document.getElementById('gs1')) {
+  cizim('gs1', [{ label: 'Servis Kâr', data: SERVIS_KAR, backgroundColor: '#eda100' }], false);
+  cizim('gs2', [{ label: 'Servis Tahsilat', data: SERVIS_TAHSILAT, backgroundColor: '#4a3aa7' }], false);
+}
+<?php endif; ?>
 </script>
 <?php page_footer(); ?>
