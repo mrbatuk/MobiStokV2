@@ -193,10 +193,17 @@ page_header('Ayarlar', 'ayarlar');
     <div class="panel">
       <h2 style="margin-top:0">Excel'den İçe Aktar</h2>
       <p class="muted">
-        Mevcut Excel dosyanı seç. <strong>SIFIR CİHAZ</strong> ve <strong>2.EL</strong> sayfaları okunur
-        (RAPOR ve STOK atlanır; farklı adlı sayfalar aynı adla kategori olarak eklenir).
-        Kolon sırası Excel'deki gibi olmalı: Alış Tarihi, Model, IMEI, Alış Fiyatı, Satıcı, Satış Tarihi, Satış Fiyatı.
+        Tek sayfalık Excel dosyası seç. İlk satır <strong>başlık</strong> olmalı; sütunlar başlık adına göre eşlenir
+        (sıra önemli değil). Tanınan başlıklar:
+        <strong>Kategori, Alış Tarihi, Model, IMEI, Alış Fiyatı, Satıcı, Genel Not, Alış Notu, Satış Tarihi,
+        Satış Fiyatı, Alıcı, Satış Notu</strong>.
+        Kategori her satırda belirtilir (SIFIR, 2.EL, AKSESUAR veya yeni ad → otomatik oluşturulur).
+        Kâr ve Bekleme sütunları hesaplanır, dosyada olsalar bile yok sayılır.
       </p>
+      <div class="form-row">
+        <button class="btn sec" type="button" id="sablonBtn">⬇ Boş Şablon İndir</button>
+        <span class="muted" style="font-size:.85rem">Doğru başlıkları içeren örnek dosyayı indirip verilerini doldur.</span>
+      </div>
       <div class="form-row">
         <input type="file" id="dosya" accept=".xlsx,.xls">
       </div>
@@ -673,6 +680,65 @@ function fiyat(v) {
   return isNaN(f) ? null : f;
 }
 
+// Başlık metnini normalize et (TR küçük harf, boşluk/nokta sadeleştir)
+function basNorm(v) {
+  return String(v ?? '')
+    .replace(/İ/g, 'i').replace(/I/g, 'ı')
+    .toLocaleLowerCase('tr')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+// Başlık adı -> alan eşlemesi (Kâr ve Bekleme kasten yok)
+const BASLIK_ESLEME = {
+  'kategori': 'category',
+  'alış tarihi': 'purchase_date',
+  'model': 'model',
+  // TR locale I→ı yaptığı için "IMEI" başlığı "ımeı" olur; ikisini de kabul et
+  'imei': 'imei',
+  'ımeı': 'imei',
+  'alış fiyatı': 'purchase_price',
+  'satıcı': 'seller',
+  'genel not': 'note',
+  'not': 'note',
+  'alış notu': 'purchase_note',
+  'satış tarihi': 'sale_date',
+  'satış fiyatı': 'sale_price',
+  'alıcı': 'buyer',
+  'satış notu': 'sale_note'
+};
+
+// Excel IMEI'yi sayı olarak okuyabilir; bilimsel gösterime düşmesin
+function imeiStr(v) {
+  if (v == null || v === '') return '';
+  if (typeof v === 'number') {
+    if (!isFinite(v)) return '';
+    return Number.isSafeInteger(v) ? String(v) : String(Math.round(v));
+  }
+  let s = String(v).trim();
+  // "3.5E+14" gibi bilimsel gösterim → tam sayı metni
+  if (/^\d+(\.\d+)?e[+\-]?\d+$/i.test(s)) {
+    const n = Number(s);
+    if (isFinite(n) && Number.isSafeInteger(n)) return String(n);
+  }
+  return s;
+}
+
+// Boş şablon indir: doğru başlık satırı + birkaç örnek satır
+document.getElementById('sablonBtn').addEventListener('click', () => {
+  const basliklar = ['Kategori', 'Alış Tarihi', 'Model', 'IMEI', 'Alış Fiyatı', 'Satıcı',
+    'Genel Not', 'Alış Notu', 'Satış Tarihi', 'Satış Fiyatı', 'Alıcı', 'Satış Notu'];
+  const ornekler = [
+    ['SIFIR', '01.07.2026', 'iPhone 16 128GB', '350000000000001', 47000, 'Vatan Toptan',
+      'Kutulu', 'Peşin alındı', '10.07.2026', 50000, 'Ali Demir', 'Nakit satış'],
+    ['2.EL', '05.07.2026', 'Samsung Galaxy S22', '350000000000002', 16000, 'Bireysel Müşteri',
+      '', '', '', '', '', ''],
+    ['AKSESUAR', '06.07.2026', 'Silikon Kılıf', '', 120, 'İstanbul Toptancı',
+      '', '', '08.07.2026', 250, '', 'Kredi kartı'],
+  ];
+  excelAktar([basliklar, ...ornekler], 'cihaz_ice_aktarma_sablonu', 'Cihazlar');
+});
+
 document.getElementById('dosya').addEventListener('change', async (ev) => {
   const dosya = ev.target.files[0];
   if (!dosya) return;
@@ -680,36 +746,48 @@ document.getElementById('dosya').addEventListener('change', async (ev) => {
   hazirSatirlar = [];
   const ozet = [];
   for (const ad of wb.SheetNames) {
-    const adU = ad.trim().toUpperCase('tr-TR');
-    if (adU === 'RAPOR' || adU === 'STOK') continue;
-    let kategori = ad.trim();
-    if (adU.includes('SIFIR')) kategori = 'SIFIR';
-    else if (adU.includes('2.EL') || adU.includes('2EL')) kategori = '2.EL';
     const satirlar = XLSX.utils.sheet_to_json(wb.Sheets[ad], { header: 1, raw: true, defval: '' });
+    if (satirlar.length < 2) continue;
+
+    // İlk satır başlık: alan -> sütun indeksi
+    const idx = {};
+    satirlar[0].forEach((h, i) => {
+      const alan = BASLIK_ESLEME[basNorm(h)];
+      if (alan && idx[alan] === undefined) idx[alan] = i;
+    });
+    // Kategori sütunu yoksa bu sayfa yeni format değildir, atla
+    if (idx.category === undefined || idx.model === undefined || idx.purchase_date === undefined) continue;
+
+    const hucre = (r, alan) => (idx[alan] === undefined ? '' : r[idx[alan]]);
     let sayi = 0;
-    for (let i = 1; i < satirlar.length; i++) { // ilk satır başlık
+    for (let i = 1; i < satirlar.length; i++) {
       const r = satirlar[i];
-      const alisTarihi = tarihISO(r[0]);
-      const model = String(r[1] ?? '').trim();
-      if (!alisTarihi || !model) continue;
-      const satisTarihi = tarihISO(r[5]);
+      const kategori = String(hucre(r, 'category') ?? '').trim();
+      const alisTarihi = tarihISO(hucre(r, 'purchase_date'));
+      const model = String(hucre(r, 'model') ?? '').trim();
+      if (!kategori || !alisTarihi || !model) continue;
+      const satisTarihi = tarihISO(hucre(r, 'sale_date'));
       hazirSatirlar.push({
         category: kategori,
         purchase_date: alisTarihi,
         model: model,
-        imei: String(r[2] ?? '').trim(),
-        purchase_price: fiyat(r[3]) ?? 0,
-        seller: String(r[4] ?? '').trim(),
+        imei: imeiStr(hucre(r, 'imei')),
+        purchase_price: fiyat(hucre(r, 'purchase_price')) ?? 0,
+        seller: String(hucre(r, 'seller') ?? '').trim(),
+        note: String(hucre(r, 'note') ?? '').trim(),
+        purchase_note: String(hucre(r, 'purchase_note') ?? '').trim(),
         sale_date: satisTarihi,
-        sale_price: satisTarihi ? fiyat(r[6]) : null
+        sale_price: satisTarihi ? fiyat(hucre(r, 'sale_price')) : null,
+        buyer: satisTarihi ? String(hucre(r, 'buyer') ?? '').trim() : '',
+        sale_note: satisTarihi ? String(hucre(r, 'sale_note') ?? '').trim() : ''
       });
       sayi++;
     }
-    if (sayi > 0) ozet.push(ad + ' → ' + kategori + ': ' + sayi + ' kayıt');
+    if (sayi > 0) ozet.push(ad + ': ' + sayi + ' kayıt');
   }
   document.getElementById('onizleme').textContent = hazirSatirlar.length
     ? 'Bulunan: ' + ozet.join(' | ')
-    : 'Dosyada aktarılacak kayıt bulunamadı.';
+    : 'Dosyada aktarılacak kayıt bulunamadı (Kategori sütunlu başlık satırı gerekli).';
   document.getElementById('aktarBtn').disabled = hazirSatirlar.length === 0;
 });
 

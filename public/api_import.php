@@ -37,8 +37,9 @@ try {
     }
 
     $ins = $pdo->prepare('INSERT INTO devices (category_id, purchase_date, model, imei,
-                          purchase_price, seller, note, sale_date, sale_price, profit)
-                          VALUES (?,?,?,?,?,?,?,?,?,?)');
+                          purchase_price, seller, note, purchase_note, sale_note, buyer,
+                          sale_date, sale_price, profit)
+                          VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)');
     $eklenen = 0;
 
     foreach ($rows as $r) {
@@ -66,7 +67,10 @@ try {
             imei_enc(trim((string)($r['imei'] ?? ''))),
             $alis,
             trim((string)($r['seller'] ?? '')),
-            '',
+            trim((string)($r['note'] ?? '')),
+            trim((string)($r['purchase_note'] ?? '')),
+            $satildi ? trim((string)($r['sale_note'] ?? '')) : '',
+            $satildi ? trim((string)($r['buyer'] ?? '')) : '',
             $satildi ? $satisTarih : null,
             $satildi ? $satis : null,
             $satildi ? $satis - $alis : null,
