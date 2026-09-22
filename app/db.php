@@ -70,6 +70,23 @@ function db_init_schema(PDO $pdo): void
             value TEXT
         )
     ");
+    $pdo->exec("
+        CREATE TABLE IF NOT EXISTS servis (
+            id            INTEGER PRIMARY KEY AUTOINCREMENT,
+            musteri       TEXT NOT NULL,
+            tel           TEXT DEFAULT '',
+            cihaz         TEXT NOT NULL,
+            ariza         TEXT DEFAULT '',
+            alinan_tarih  TEXT NOT NULL,
+            teslim_tarih  TEXT,
+            maliyet       REAL NOT NULL DEFAULT 0,
+            tahsilat      REAL NOT NULL DEFAULT 0,
+            kar           REAL NOT NULL DEFAULT 0,
+            durum         TEXT NOT NULL DEFAULT 'alindi',
+            note          TEXT DEFAULT '',
+            created_at    TEXT DEFAULT (datetime('now'))
+        )
+    ");
 
     // Eski kayıtlarda note alanı alış notu olarak kullanılıyordu.
     // purchase_note boşsa note'u oraya taşı — SADECE BİR KEZ.

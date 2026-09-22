@@ -17,9 +17,9 @@ $st2   = $_GET['st2'] ?? '';
 $where = [];
 $params = [];
 if ($q !== '') {
-    $where[] = '(d.model LIKE ? OR d.seller LIKE ? OR d.note LIKE ?)';
+    $where[] = '(d.model LIKE ? OR d.seller LIKE ? OR d.note LIKE ? OR d.buyer LIKE ? OR d.purchase_note LIKE ? OR d.sale_note LIKE ?)';
     $like = '%' . $q . '%';
-    array_push($params, $like, $like, $like);
+    array_push($params, $like, $like, $like, $like, $like, $like);
 }
 if ($at1 !== '') { $where[] = 'd.purchase_date >= ?'; $params[] = $at1; }
 if ($at2 !== '') { $where[] = 'd.purchase_date <= ?'; $params[] = $at2; }
@@ -41,10 +41,13 @@ unset($r);
 if ($q !== '') {
     $qL   = mb_strtolower($q, 'UTF-8');
     $rows = array_values(array_filter($rows, fn($r) =>
-        mb_stripos($r['model'],        $qL, 0, 'UTF-8') !== false
-     || mb_stripos($r['imei'],         $qL, 0, 'UTF-8') !== false
-     || mb_stripos($r['seller'] ?? '', $qL, 0, 'UTF-8') !== false
-     || mb_stripos($r['note']   ?? '', $qL, 0, 'UTF-8') !== false
+        mb_stripos($r['model'],              $qL, 0, 'UTF-8') !== false
+     || mb_stripos($r['imei'],               $qL, 0, 'UTF-8') !== false
+     || mb_stripos($r['seller']       ?? '', $qL, 0, 'UTF-8') !== false
+     || mb_stripos($r['note']         ?? '', $qL, 0, 'UTF-8') !== false
+     || mb_stripos($r['buyer']        ?? '', $qL, 0, 'UTF-8') !== false
+     || mb_stripos($r['purchase_note']?? '', $qL, 0, 'UTF-8') !== false
+     || mb_stripos($r['sale_note']    ?? '', $qL, 0, 'UTF-8') !== false
     ));
 }
 
@@ -62,6 +65,7 @@ foreach ($rows as $r) {
         'imei'     => $r['imei'],
         'seller'   => $r['seller'],
         'note'     => $r['note'],
+        'pnote'    => $r['purchase_note'] ?? '',
         'buyer'    => $satildi ? ($r['buyer'] ?? '') : '',
         'pd'       => trdate($r['purchase_date']),
         'sd'       => $satildi ? trdate($r['sale_date']) : '',
@@ -72,7 +76,7 @@ foreach ($rows as $r) {
         'satis'    => $satildi ? (float)$r['sale_price'] : null,
         'kar'      => $satildi ? (float)$r['profit'] : null,
         'snote'    => $r['sale_note'] ?? '',
-        'ara'      => tr_lower($r['model'] . ' ' . $r['imei'] . ' ' . $r['seller'] . ' ' . $r['note']),
+        'ara'      => tr_lower($r['model'] . ' ' . $r['imei'] . ' ' . $r['seller'] . ' ' . $r['note'] . ' ' . ($r['buyer'] ?? '') . ' ' . ($r['purchase_note'] ?? '') . ' ' . ($r['sale_note'] ?? '')),
     ];
 }
 
@@ -142,7 +146,7 @@ page_header('Cihazlar', 'cihazlar');
   <input type="hidden" name="kat" id="hiddenKat" value="<?= e($kat) ?>">
   <input type="hidden" name="durum" id="hiddenDurum" value="<?= e($durum) ?>">
   <div class="grow">
-    <label>Ara (model, IMEI, satıcı, not)</label>
+    <label>Ara (model, IMEI, satıcı, alıcı, notlar)</label>
     <input type="text" name="q" id="araKutu" value="<?= e($q) ?>" placeholder="Yazdıkça filtreler..." autocomplete="off">
   </div>
   <div>
@@ -484,16 +488,17 @@ function veriGuncelle(id, yeniNot) {
   const d = dataMap[id];
   if (!d) return;
   d.note = yeniNot;
-  d.ara = (d.model + ' ' + d.imei + ' ' + d.seller + ' ' + yeniNot).toLocaleLowerCase('tr');
+  d.ara = (d.model + ' ' + d.imei + ' ' + d.seller + ' ' + yeniNot + ' ' + (d.buyer || '') + ' ' + (d.pnote || '') + ' ' + (d.snote || '')).toLocaleLowerCase('tr');
 }
 
 // ---- Excel: filtreli tüm satırlar (sadece görünen sayfa değil) ----
 function gorunenleriAktar() {
-  const data = [['Kategori','Alış Tarihi','Model','IMEI','Alış Fiyatı','Satıcı','Not','Satış Tarihi','Satış Fiyatı','Kâr','Alıcı','Bekleme (gün)','Satış Notu']];
+  // Başlıklar içe aktarma şablonuyla uyumlu; Kâr ve Bekleme hesaplanan alan (geri yüklemede yok sayılır)
+  const data = [['Kategori','Alış Tarihi','Model','IMEI','Alış Fiyatı','Satıcı','Genel Not','Alış Notu','Satış Tarihi','Satış Fiyatı','Alıcı','Satış Notu','Kâr','Bekleme (gün)']];
   for (const d of filtreli) {
     data.push([
-      d.kategori, d.pd, d.model, d.imei, d.alis, d.seller, d.note,
-      d.sd, d.satis ?? '', d.kar ?? '', d.buyer, (d.bekleme ?? ''), d.snote
+      d.kategori, d.pd, d.model, d.imei, d.alis, d.seller, d.note, d.pnote,
+      d.sd, d.satis ?? '', d.buyer, d.snote, d.kar ?? '', (d.bekleme ?? '')
     ]);
   }
   excelAktar(data, 'cihazlar', 'Cihazlar');

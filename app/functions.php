@@ -241,6 +241,7 @@ function page_header(string $title, string $active = ''): void
         'index'    => ['index.php', 'Panel'],
         'cihazlar' => ['cihazlar.php', 'Cihazlar'],
         'stok'     => ['stok.php', 'Stok'],
+        'servis'   => ['servis.php', 'Servis'],
         'rapor'    => ['rapor.php', 'Rapor'],
         'ayarlar'  => ['ayarlar.php', 'Ayarlar'],
     ];

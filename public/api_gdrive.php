@@ -288,7 +288,9 @@ switch ($action) {
             echo json_encode(['ok' => true, 'atildi' => 'kapali'], JSON_UNESCAPED_UNICODE);
             break;
         }
-        if (!rclone_mevcut() || !remote_mevcut()) {
+        // remote_mevcut() yerine önbelleklenmiş bayrak kullan — rclone process başlatılmaz,
+        // sunucu bloke olmaz. Bağlantı durumu zaten 'yedekle'/'durum' işlemlerinde güncelleniyor.
+        if (!rclone_mevcut() || setting($pdo, 'gdrive_bagli', '0') !== '1') {
             echo json_encode(['ok' => true, 'atildi' => 'bagli_degil'], JSON_UNESCAPED_UNICODE);
             break;
         }

@@ -219,6 +219,13 @@ tr.toplam td { font-weight: 700; background: #f4f4f5; border-top: 2px solid #d4d
 .bekleme-sari    { background: #fef9c3; color: #854d0e; }
 .bekleme-kirmizi { background: #fee2e2; color: #b91c1c; }
 
+/* ---- Servis durum rozetleri ---- */
+.durum-alindi    { background: #f4f4f5; color: #52525b; }
+.durum-tamircide { background: #fff7ed; color: #c2410c; }
+.durum-hazir     { background: #eff6ff; color: #1d4ed8; }
+.durum-teslim    { background: #f0fdf4; color: #15803d; }
+.durum-iptal     { background: #fef2f2; color: #b91c1c; }
+
 /* ---- Formlar ---- */
 label {
   display: block;
