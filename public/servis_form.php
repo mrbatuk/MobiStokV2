@@ -97,7 +97,6 @@ page_header($baslik, 'servis');
     <input type="hidden" name="action" value="save">
     <?php if ($kay): ?><input type="hidden" name="id" value="<?= $kay['id'] ?>"><?php endif; ?>
 
-    <p class="fk-baslik">Müşteri &amp; Cihaz</p>
     <div class="form-grid">
       <div class="form-row">
         <label>Müşteri Adı</label>
@@ -105,7 +104,7 @@ page_header($baslik, 'servis');
       </div>
       <div class="form-row">
         <label>Telefon <span class="muted">(isteğe bağlı)</span></label>
-        <input type="tel" name="tel" value="<?= e($kay['tel'] ?? '') ?>" placeholder="0555 000 00 00">
+        <input type="text" name="tel" value="<?= e($kay['tel'] ?? '') ?>" inputmode="tel" placeholder="0555 000 00 00" autocomplete="tel">
       </div>
       <div class="form-row">
         <label>Cihaz</label>
@@ -115,22 +114,13 @@ page_header($baslik, 'servis');
         <label>Arıza <span class="muted">(isteğe bağlı)</span></label>
         <input type="text" name="ariza" value="<?= e($kay['ariza'] ?? '') ?>" placeholder="Ekran kırık, şarj almıyor…">
       </div>
-    </div>
-
-    <hr class="fk-ayrac">
-    <p class="fk-baslik">Tarih &amp; Durum</p>
-    <div class="form-grid">
       <div class="form-row">
         <label>Alındı Tarihi</label>
         <input type="date" name="alinan_tarih" value="<?= e($kay['alinan_tarih'] ?? date('Y-m-d')) ?>" required>
       </div>
       <div class="form-row">
-        <label>Teslim Tarihi <span class="muted">(durum "Teslim" olunca otomatik dolar)</span></label>
-        <input type="date" name="teslim_tarih" value="<?= e($kay['teslim_tarih'] ?? '') ?>">
-      </div>
-      <div class="form-row">
         <label>Durum</label>
-        <select name="durum" id="durumSec">
+        <select name="durum">
           <?php
           $durumlar = [
             'alindi'    => 'Alındı',
@@ -146,10 +136,14 @@ page_header($baslik, 'servis');
           <?php endforeach; ?>
         </select>
       </div>
+      <div class="form-row" style="grid-column:1/-1">
+        <label>Teslim Tarihi <span class="muted">— "Teslim" seçilip boş bırakılırsa bugün girer</span></label>
+        <input type="date" name="teslim_tarih" value="<?= e($kay['teslim_tarih'] ?? '') ?>" style="max-width:200px">
+      </div>
     </div>
 
     <hr class="fk-ayrac">
-    <p class="fk-baslik">Ücretler</p>
+
     <div class="form-grid">
       <div class="form-row">
         <label>Tamirciye Ödenen (TL)</label>
