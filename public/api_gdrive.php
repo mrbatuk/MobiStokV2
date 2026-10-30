@@ -288,8 +288,7 @@ switch ($action) {
             echo json_encode(['ok' => true, 'atildi' => 'kapali'], JSON_UNESCAPED_UNICODE);
             break;
         }
-        // remote_mevcut() yerine önbelleklenmiş bayrak kullan — rclone process başlatılmaz,
-        // sunucu bloke olmaz. Bağlantı durumu zaten 'yedekle'/'durum' işlemlerinde güncelleniyor.
+        // remote_mevcut() yerine önbelleklenmiş bayrak kullan — rclone process başlatılmaz
         if (!rclone_mevcut() || setting($pdo, 'gdrive_bagli', '0') !== '1') {
             echo json_encode(['ok' => true, 'atildi' => 'bagli_degil'], JSON_UNESCAPED_UNICODE);
             break;
@@ -303,31 +302,32 @@ switch ($action) {
             break;
         }
 
-        // Yedek zamanı geldi → rclone'u senkron çalıştır, çıktıyı kontrol et
         $src       = DB_YOL;
         $destKlas  = REMOTE_AD . ':' . YEDEK_KLASORU;
         $destDosya = $destKlas . '/' . yedek_dosya_adi();
-        exec('"' . RCLONE . '" copyto ' . escapeshellarg($src) . ' ' . escapeshellarg($destDosya) . ' 2>&1', $out, $code);
+        $gunSayisi = (int)setting($pdo, 'gdrive_sakla_gun', '7');
 
-        // Sadece başarılıysa timestamp güncelle
-        if ($code !== 0) {
-            $logYol = sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'mobistok_yedek_hata.log';
-            file_put_contents($logYol, date('d.m.Y H:i:s') . "\n" . implode("\n", $out) . "\n\n", FILE_APPEND);
-            // Token süresi dolmuş olabilir — bağlı değil işaretle
-            if (stripos(implode(' ', $out), 'token') !== false || stripos(implode(' ', $out), 'auth') !== false) {
-                set_setting($pdo, 'gdrive_bagli', '0');
-            }
-            echo json_encode(['ok' => false, 'atildi' => 'hata', 'hata' => implode("\n", $out)], JSON_UNESCAPED_UNICODE);
-            break;
-        }
-
+        // Timestamp iyimser olarak şimdiye yaz — arka plan işlemi bitmeden yeniden tetiklenmesin
         $ts    = time();
         $zaman = date('d.m.Y H:i', $ts);
         set_setting($pdo, 'gdrive_son_yedek',    $zaman);
         set_setting($pdo, 'gdrive_son_yedek_ts', (string)$ts);
-        // Eski yedekleri temizle
-        $gunSayisi = (int)setting($pdo, 'gdrive_sakla_gun', '7');
-        cleanup_eski_yedekler($gunSayisi, $destKlas);
+
+        // Geçici .bat aracılığıyla arka planda çalıştır — PHP sunucu bloke olmaz
+        $rclone = str_replace('/', '\\', RCLONE);
+        $srcW   = str_replace('/', '\\', $src);
+        $logYol = sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'mobistok_yedek.log';
+        $bat    = "@echo off\r\n"
+                . "\"$rclone\" copyto \"$srcW\" \"$destDosya\" > \"$logYol\" 2>&1\r\n";
+        if ($gunSayisi > 0) {
+            // Başarılıysa N günden eski yedekleri temizle
+            $bat .= "if %errorlevel%==0 \"$rclone\" delete \"$destKlas\""
+                  . " --min-age {$gunSayisi}d --include \"telefoncu_*.db\""
+                  . " >> \"$logYol\" 2>&1\r\n";
+        }
+        $batYol = sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'mobistok_yedek.bat';
+        file_put_contents($batYol, $bat);
+        pclose(popen('start /B "" "' . $batYol . '"', 'r'));
 
         echo json_encode(['ok' => true, 'atildi' => 'baslatildi', 'zaman' => $zaman], JSON_UNESCAPED_UNICODE);
         break;
